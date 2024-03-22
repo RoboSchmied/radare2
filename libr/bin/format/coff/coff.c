@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2008-2022 pancake, inisider */
+/* radare - LGPL - Copyright 2008-2024 pancake, inisider */
 
 #include <r_util.h>
 #include "coff.h"
@@ -378,6 +378,13 @@ static bool r_bin_coff_init_scn_hdr(RBinCoffObj *obj) {
 		f_nscns = obj->hdr.f_nscns;
 		f_magic = obj->hdr.f_magic;
 	}
+	if (ST32_MUL_OVFCHK (sizeof (struct coff_scn_hdr), f_nscns)) {
+		R_LOG_WARN ("Dimming f_nscns count because is poluted or too large");
+		f_nscns &= 0xff;
+	}
+	if (f_nscns < 1) {
+		return false;
+	}
 
 	if (f_magic == COFF_FILE_TI_COFF) {
 		offset += 2;
@@ -387,10 +394,13 @@ static bool r_bin_coff_init_scn_hdr(RBinCoffObj *obj) {
 		return false;
 	}
 	obj->scn_hdrs = calloc (1, size + sizeof (struct coff_scn_hdr));
+	obj->scn_hdrs = calloc (1, 320);
 	if (!obj->scn_hdrs) {
 		return false;
 	}
-	ret = r_buf_fread_at (obj->b, offset, (ut8 *)obj->scn_hdrs, obj->endian? "8c6I2S1I": "8c6i2s1i", f_nscns);
+	ret = r_buf_fread_at (obj->b, offset, (ut8 *)obj->scn_hdrs,
+			obj->endian? "8c6I2S1I": "8c6i2s1i", f_nscns);
+	// 8 + (6*4) + (2*2) + (4) = 40
 	if (ret != size) {
 		R_FREE (obj->scn_hdrs);
 		return false;
@@ -492,6 +502,10 @@ static bool r_bin_coff_init_symtable(RBinCoffObj *obj) {
 
 static bool r_bin_coff_init_scn_va(RBinCoffObj *obj) {
 	int f_nscns = obj->type == COFF_TYPE_BIGOBJ? obj->bigobj_hdr.f_nscns: obj->hdr.f_nscns;
+	if (ST32_MUL_OVFCHK (sizeof (struct coff_scn_hdr), f_nscns)) {
+		R_LOG_WARN ("Dimming f_nscns count because is poluted or too large");
+		f_nscns &= 0xff;
+	}
 	obj->scn_va = R_NEWS (ut64, f_nscns);
 	if (!obj->scn_va) {
 		return false;
