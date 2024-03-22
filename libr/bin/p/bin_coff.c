@@ -79,7 +79,7 @@ static bool _fill_bin_symbol(RBin *rbin, struct r_bin_coff_obj *bin, int idx, RB
 	ptr->forwarder = "NONE";
 	ptr->bind = R_BIN_BIND_LOCAL_STR;
 	ptr->is_imported = false;
-	if (n_scnum < f_nscns + 1 && n_scnum > 0) {
+	if (n_scnum < f_nscns + 1 && n_scnum > 0 && bin->scn_hdrs) {
 		//first index is 0 that is why -1
 		sc_hdr = &bin->scn_hdrs[n_scnum - 1];
 		ptr->paddr = sc_hdr->s_scnptr + n_value;
@@ -353,12 +353,16 @@ static RList *sections(RBinFile *bf) {
 		return NULL;
 	}
 	ut32 f_nscns = obj->type == COFF_TYPE_BIGOBJ? obj->bigobj_hdr.f_nscns: obj->hdr.f_nscns;
+	if (f_nscns < 1 || f_nscns > UT16_MAX) {
+		// return NULL;
+		f_nscns &= 0xff;
+	}
 	if (obj && obj->scn_hdrs) {
 		for (i = 0; i < f_nscns; i++) {
 			tmp = r_coff_symbol_name (obj, &obj->scn_hdrs[i]);
 			if (!tmp) {
 				r_list_free (ret);
-				return NULL;
+				continue;
 			}
 			//IO does not like sections with the same name append idx
 			//since it will update it
